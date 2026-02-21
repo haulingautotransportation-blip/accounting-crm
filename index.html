@@ -2,15 +2,18 @@
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Accounting CRM</title>
 </head>
 <body>
   <h1>Accounting CRM</h1>
-  <p>Firebase Connected ✅</p>
+  <p id="status">Firebase Connected ✅</p>
+
+  <button id="addBtn">Add test transaction</button>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyA76ULnrJ107f-PSkKZR3GNNEk_fRzAE7U",
@@ -24,8 +27,21 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    console.log("Firebase connected");
+    document.getElementById("addBtn").onclick = async () => {
+      try {
+        const docRef = await addDoc(collection(db, "transactions"), {
+          date: "2025-12-31",
+          amount: 100.00,
+          description: "TEST deposit",
+          account: "8930",
+          createdAt: serverTimestamp()
+        });
+        document.getElementById("status").textContent = "Saved ✅ ID: " + docRef.id;
+      } catch (e) {
+        document.getElementById("status").textContent = "Error ❌ " + e.message;
+        console.error(e);
+      }
+    };
   </script>
-
 </body>
 </html>
