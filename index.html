@@ -26,7 +26,7 @@
 </head>
 <body>
   <h1>Accounting CRM</h1>
-  <div class="small">Single-user mode ✅ (we’ll add login later)</div>
+  <div class="small">Single-user mode ✅ (login later)</div>
 
   <!-- ADD TRANSACTION -->
   <div class="card">
@@ -83,7 +83,7 @@
   <!-- MONTHLY SUMMARY -->
   <div class="card">
     <div class="actions" style="margin-top:0;">
-      <h3 style="margin:0; flex:1;">Monthly Summary</h3>
+      <h3 style="margin:0; flex:1;">Monthly Summary (Accounting Logic)</h3>
 
       <div style="min-width:220px;">
         <label style="margin:0 0 6px;">Month</label>
@@ -103,21 +103,21 @@
 
     <div class="summaryGrid">
       <div class="summaryBox">
-        <div class="label">Income (sum of positives)</div>
+        <div class="label">Income (Sales/Other Income/Reimb.)</div>
         <div class="value" id="sumIncome">$0.00</div>
       </div>
       <div class="summaryBox">
-        <div class="label">Expenses (sum of negatives)</div>
+        <div class="label">Expenses (COGS/Payroll/etc.)</div>
         <div class="value" id="sumExpense">$0.00</div>
       </div>
       <div class="summaryBox">
-        <div class="label">Net (income + expenses)</div>
+        <div class="label">Net (Income − Expenses)</div>
         <div class="value" id="sumNet">$0.00</div>
       </div>
     </div>
 
     <div class="small" style="margin-top:8px;">
-      Note: Summary uses positive/negative amount. (We can upgrade to category-based accounting logic next.)
+      Loans and Internal Transfers are excluded from P&L totals ✅
     </div>
   </div>
 
@@ -137,7 +137,6 @@
       query, orderBy, limit, onSnapshot, where, getDocs
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-    // ✅ YOUR FIREBASE CONFIG (current)
     const firebaseConfig = {
       apiKey: "AIzaSyBZti11UlAEp5_7fcB9r8l7i1HpIQxhLwg",
       authDomain: "accounting-crm-web.firebaseapp.com",
@@ -155,6 +154,31 @@
     const listEl = el("list");
     const filterEl = el("filterAccount");
     const monthEl = el("monthPick");
+
+    // ---------- CATEGORY RULES (Accounting Logic) ----------
+    // Income categories (count as revenue)
+    const INCOME_CATEGORIES = new Set([
+      "Sales",
+      "Other Income",
+      "Sales Reimbursement"
+    ]);
+
+    // Expense categories (count as expense)
+    const EXPENSE_CATEGORIES = new Set([
+      "COGS",
+      "Repairs & Maintenance",
+      "Fuel",
+      "Payroll",
+      "Contract Labor",
+      "Other Expense"
+    ]);
+
+    // Excluded from P&L (loans, transfers)
+    const EXCLUDED_CATEGORIES = new Set([
+      "Loan from Others",
+      "Internal Transfer"
+    ]);
+    // ------------------------------------------------------
 
     // defaults
     el("date").value = new Date().toISOString().slice(0,10);
@@ -234,7 +258,7 @@
       unsubscribe = onSnapshot(q, renderList);
     }
 
-    // ----- Monthly summary -----
+    // ----- Monthly summary (category-based) -----
     function monthRange(monthValue){
       const [y, m] = monthValue.split("-").map(Number);
       const start = `${y}-${String(m).padStart(2,"0")}-01`;
@@ -277,13 +301,29 @@
       snap.forEach((doc) => {
         const t = doc.data();
         const amt = Number(t.amount || 0);
-        if (amt >= 0) income += amt;
-        else expense += amt; // negative
+        const cat = String(t.category || "");
+
+        // Ignore excluded categories completely
+        if (EXCLUDED_CATEGORIES.has(cat)) return;
+
+        // Income categories: add amount (force positive)
+        if (INCOME_CATEGORIES.has(cat)) {
+          income += Math.abs(amt);
+          return;
+        }
+
+        // Expense categories: add amount (force positive)
+        if (EXPENSE_CATEGORIES.has(cat)) {
+          expense += Math.abs(amt);
+          return;
+        }
+
+        // If category is unknown, do nothing (keeps totals clean)
       });
 
       el("sumIncome").textContent = money(income);
       el("sumExpense").textContent = money(expense);
-      el("sumNet").textContent = money(income + expense);
+      el("sumNet").textContent = money(income - expense);
     }
 
     filterEl.addEventListener("change", async () => {
