@@ -912,32 +912,98 @@
       jsonToCsvDownload(TEMPLATE_ROWS, "transactions_import_template.csv");
     });
 
-    // Import
-    el("importBtn").addEventListener("click", async () => {
-      const f = el("importFile").files?.[0];
-      if (!f) { el("importStatus").textContent = "❌ Select a file first"; return; }
+   el("importBtn").addEventListener("click", async () => {
+  const f = el("importFile").files?.[0];
+  if (!f) { el("importStatus").textContent = "❌ Select a file first"; return; }
 
-      // Load locks before import to prevent locked-month writes
-      await loadLockedMonths();
+  try {
+    // Load locks first
+    await loadLockedMonths();
 
-      el("importStatus").textContent = "Reading file…";
-      const data = await f.arrayBuffer();
-      const wb = XLSX.read(data, { type:"array" });
+    el("importStatus").textContent = "Reading file… (0%)";
+
+    // --- 1) Read rows depending on file type ---
+    let rows = [];
+    const name = (f.name || "").toLowerCase();
+
+    if (name.endsWith(".csv")) {
+      const text = await f.text();
+      el("importStatus").textContent = "Parsing CSV…";
+
+      // Parse CSV safely
+      const wb = XLSX.read(text, { type: "string" });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { defval:"" });
+      rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
 
-      let okCount = 0, skipCount = 0, failCount = 0;
-      for (const r of rows){
-        const norm = normalizeRow(r);
-        if (!norm.ok){ failCount++; continue; }
+    } else {
+      const data = await f.arrayBuffer();
+      el("importStatus").textContent = "Parsing Excel…";
 
-        const mk = monthKeyFromDate(norm.data.date);
-        if (lockedMonths.has(mk)){ skipCount++; continue; }
+      const wb = XLSX.read(data, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+    }
 
-        const payload = {
-          ...norm.data,
-          createdAt: serverTimestamp()
-        };
+    if (!rows.length) {
+      el("importStatus").textContent = "❌ No rows found in file.";
+      return;
+    }
+
+    // --- 2) Normalize + validate first (fast) ---
+    el("importStatus").textContent = `Validating ${rows.length} rows…`;
+
+    const toInsert = [];
+    let failCount = 0, skipCount = 0;
+
+    for (const r of rows) {
+      const norm = normalizeRow(r);
+      if (!norm.ok) { failCount++; continue; }
+
+      const mk = monthKeyFromDate(norm.data.date);
+      if (lockedMonths.has(mk)) { skipCount++; continue; }
+
+      toInsert.push({
+        ...norm.data,
+        createdAt: serverTimestamp()
+      });
+    }
+
+    if (!toInsert.length) {
+      el("importStatus").textContent = `❌ Nothing to import. Failed: ${failCount} • Skipped (locked): ${skipCount}`;
+      return;
+    }
+
+    // --- 3) Insert in chunks (prevents freeze) ---
+    el("importStatus").textContent = `Importing ${toInsert.length} rows…`;
+
+    const CHUNK = 50; // safe size
+    let okCount = 0;
+
+    for (let i = 0; i < toInsert.length; i += CHUNK) {
+      const batch = toInsert.slice(i, i + CHUNK);
+
+      // run chunk in parallel
+      await Promise.all(
+        batch.map(payload => addDoc(collection(db, "transactions"), payload))
+      );
+
+      okCount += batch.length;
+
+      const pct = Math.round((okCount / toInsert.length) * 100);
+      el("importStatus").textContent = `Importing… ${okCount}/${toInsert.length} (${pct}%)`;
+    }
+
+    el("importStatus").textContent =
+      `✅ Imported: ${okCount} • Skipped (locked): ${skipCount} • Failed: ${failCount}`;
+
+    await refreshMonthlySummary();
+    await refreshVendorListDatalist();
+
+  } catch (e) {
+    console.error(e);
+    el("importStatus").textContent = "❌ Import error: " + (e?.message || e);
+  }
+});
 
         // For P&L expenses people may put negative; we keep as given.
         // For AP tracking we use abs in calculations.
