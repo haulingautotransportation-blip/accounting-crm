@@ -1011,30 +1011,32 @@
 
     // Export transactions (all or month)
     async function fetchTransactionsForExport({month="", account="ALL"}){
-      let baseQuery = query(collection(db, "transactions"));
-      const snap = await getDocs(baseQuery);
+  let baseQuery = query(collection(db, "transactions"));
+  const snap = await getDocs(baseQuery);
 
-      const out = [];
-      snap.forEach(d => {
-        const t = d.data();
-        if (month && monthKeyFromDate(t.date) !== month) return;
-        if (account !== "ALL" && (t.account || "OTHER") !== account) return;
+  const out = [];
 
-        out.push({
-          date: t.date || "",
-          amount: Number(t.amount || 0),
-          account: t.account || "OTHER",
-          category: t.category || "",
-          description: t.description || "",
-          vendor: t.vendor || "",
-          txnType: t.txnType || "",
-          refNo: t.refNo || "",
-          vendorGroup: t.vendorGroup || "General"
-        });
+  snap.forEach(d => {
+    const t = d.data();
+    if (month && monthKeyFromDate(t.date) !== month) return;
+    if (account !== "ALL" && (t.account || "OTHER") !== account) return;
 
-      out.sort((a,b) => (a.date||"").localeCompare(b.date||""));
-      return out;
-    }
+    out.push({
+      date: t.date || "",
+      amount: Number(t.amount || 0),
+      account: t.account || "OTHER",
+      category: t.category || "",
+      description: t.description || "",
+      vendor: t.vendor || "",
+      txnType: t.txnType || "",
+      refNo: t.refNo || "",
+      vendorGroup: t.vendorGroup || "General"
+    });
+  });
+
+  out.sort((a,b) => (a.date || "").localeCompare(b.date || ""));
+  return out;
+}
 
     el("exportXlsx").addEventListener("click", async () => {
       const month = el("exportMonth").value || "";
