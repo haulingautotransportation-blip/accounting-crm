@@ -14,11 +14,14 @@
     textarea { min-height: 70px; resize: vertical; }
     button { padding: 10px 14px; font-size: 15px; border-radius: 10px; border: 1px solid #ccc; cursor: pointer; }
     .actions { display:flex; gap:10px; align-items:center; margin-top: 12px; flex-wrap: wrap; }
-    #status { margin-top: 10px; }
     .small { color:#666; font-size: 13px; }
     .list { margin-top: 10px; }
     .item { padding: 10px; border: 1px solid #eee; border-radius: 10px; margin-top: 8px; }
     .item b { display:inline-block; min-width: 90px; }
+    .summaryGrid { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 10px; }
+    .summaryBox { border:1px solid #eee; border-radius: 12px; padding: 12px; }
+    .summaryBox .label { color:#666; font-size: 13px; }
+    .summaryBox .value { font-size: 20px; margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -78,10 +81,15 @@
 
   <div class="card">
     <div class="actions" style="margin-top:0;">
-      <h3 style="margin:0; flex:1;">Recent Transactions (last 10)</h3>
+      <h3 style="margin:0; flex:1;">Monthly Summary</h3>
 
       <div style="min-width:220px;">
-        <label style="margin:0 0 6px;">Filter account</label>
+        <label style="margin:0 0 6px;">Month</label>
+        <input id="monthPick" type="month" />
+      </div>
+
+      <div style="min-width:220px;">
+        <label style="margin:0 0 6px;">Account filter</label>
         <select id="filterAccount">
           <option value="ALL">All</option>
           <option value="8930">8930</option>
@@ -91,6 +99,31 @@
       </div>
     </div>
 
+    <div class="summaryGrid">
+      <div class="summaryBox">
+        <div class="label">Income (sum of positives)</div>
+        <div class="value" id="sumIncome">$0.00</div>
+      </div>
+      <div class="summaryBox">
+        <div class="label">Expenses (sum of negatives)</div>
+        <div class="value" id="sumExpense">$0.00</div>
+      </div>
+      <div class="summaryBox">
+        <div class="label">Net (income + expenses)</div>
+        <div class="value" id="sumNet">$0.00</div>
+      </div>
+    </div>
+
+    <div class="small" style="margin-top:8px;">
+      Note: this summary reads transactions in the selected month. (We’ll optimize later.)
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="actions" style="margin-top:0;">
+      <h3 style="margin:0; flex:1;">Recent Transactions (last 10)</h3>
+      <div class="small">Uses the same account filter above</div>
+    </div>
     <div id="list" class="list"></div>
   </div>
 
@@ -98,7 +131,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import {
       getFirestore, collection, addDoc, serverTimestamp,
-      query, orderBy, limit, onSnapshot, where
+      query, orderBy, limit, onSnapshot, where, getDocs
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -117,9 +150,11 @@
     const statusEl = el("status");
     const listEl = el("list");
     const filterEl = el("filterAccount");
+    const monthEl = el("monthPick");
 
-    // default date = today
+    // defaults
     el("date").value = new Date().toISOString().slice(0,10);
+    monthEl.value = new Date().toISOString().slice(0,7); // YYYY-MM
 
     el("clearBtn").onclick = () => {
       el("amount").value = "";
@@ -150,13 +185,14 @@
         statusEl.textContent = "✅ Saved: " + docRef.id;
         el("amount").value = "";
         el("description").value = "";
+        await refreshMonthlySummary(); // update after save
       } catch (e) {
         console.error(e);
         statusEl.textContent = "❌ " + e.message;
       }
     };
 
-    // ----- Live list with filter -----
+    // ----- Recent list with filter -----
     let unsubscribe = null;
 
     function renderList(snap){
@@ -175,12 +211,11 @@
       });
     }
 
-    function subscribe(){
+    function subscribeRecent(){
       if (unsubscribe) unsubscribe();
-
       const selected = filterEl.value;
-      let q;
 
+      let q;
       if (selected === "ALL") {
         q = query(collection(db, "transactions"), orderBy("createdAt", "desc"), limit(10));
       } else {
@@ -195,8 +230,68 @@
       unsubscribe = onSnapshot(q, renderList);
     }
 
-    filterEl.addEventListener("change", subscribe);
-    subscribe();
+    // ----- Monthly summary -----
+    function monthRange(monthValue){
+      // monthValue: "YYYY-MM"
+      const [y, m] = monthValue.split("-").map(Number);
+      const start = `${y}-${String(m).padStart(2,"0")}-01`;
+      const endDate = new Date(y, m, 0); // last day of month
+      const end = `${y}-${String(m).padStart(2,"0")}-${String(endDate.getDate()).padStart(2,"0")}`;
+      return { start, end };
+    }
+
+    function money(n){
+      const num = Number(n || 0);
+      return num.toLocaleString(undefined, { style:"currency", currency:"USD" });
+    }
+
+    async function refreshMonthlySummary(){
+      const monthValue = monthEl.value; // YYYY-MM
+      const { start, end } = monthRange(monthValue);
+      const selected = filterEl.value;
+
+      let q;
+      if (selected === "ALL") {
+        q = query(
+          collection(db, "transactions"),
+          where("date", ">=", start),
+          where("date", "<=", end)
+        );
+      } else {
+        q = query(
+          collection(db, "transactions"),
+          where("account", "==", selected),
+          where("date", ">=", start),
+          where("date", "<=", end)
+        );
+      }
+
+      const snap = await getDocs(q);
+
+      let income = 0;
+      let expense = 0;
+
+      snap.forEach((doc) => {
+        const t = doc.data();
+        const amt = Number(t.amount || 0);
+        if (amt >= 0) income += amt;
+        else expense += amt; // negative
+      });
+
+      el("sumIncome").textContent = money(income);
+      el("sumExpense").textContent = money(expense);
+      el("sumNet").textContent = money(income + expense);
+    }
+
+    filterEl.addEventListener("change", async () => {
+      subscribeRecent();
+      await refreshMonthlySummary();
+    });
+
+    monthEl.addEventListener("change", refreshMonthlySummary);
+
+    subscribeRecent();
+    refreshMonthlySummary();
 
     function escapeHtml(str){
       return String(str)
