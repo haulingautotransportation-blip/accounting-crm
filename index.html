@@ -129,28 +129,72 @@
     </div>
     <div id="list" class="list"></div>
   </div>
-  <!-- RUNNING BALANCE -->
-<div class="card">
-  <h3 style="margin:0 0 10px;">Running Bank Balance</h3>
+  // -------- RUNNING BALANCE --------
+const balanceAccountEl = el("balanceAccount");
+const startingBalanceEl = el("startingBalance");
+const balanceTableEl = el("balanceTable");
+const calcBtn = el("calcBalanceBtn");
 
-  <div class="row">
-    <div>
-      <label>Account</label>
-      <select id="balanceAccount">
-        <option value="8930">8930</option>
-        <option value="9081">9081</option>
-      </select>
-    </div>
-    <div>
-      <label>Starting Balance</label>
-      <input id="startingBalance" type="number" step="0.01" placeholder="Enter beginning balance" />
-    </div>
-  </div>
+calcBtn.onclick = async () => {
+  balanceTableEl.innerHTML = "Loading...";
 
-  <button id="calcBalanceBtn" style="margin-top:12px;">Calculate Running Balance</button>
+  try {
+    const account = balanceAccountEl.value;
+    const startingBalance = Number(startingBalanceEl.value || 0);
 
-  <div id="balanceTable" style="margin-top:15px;"></div>
-</div>
+    // ✅ This query usually avoids composite index issues
+    // We order by createdAt (we already use it in other places)
+    const q = query(
+      collection(db, "transactions"),
+      where("account", "==", account),
+      orderBy("createdAt", "asc")
+    );
+
+    const snap = await getDocs(q);
+
+    let running = startingBalance;
+
+    let html = `
+      <table border="1" cellpadding="6" style="border-collapse:collapse; width:100%;">
+        <tr>
+          <th>Date</th>
+          <th>Amount</th>
+          <th>Category</th>
+          <th>Memo</th>
+          <th>Running Balance</th>
+        </tr>
+    `;
+
+    snap.forEach(doc => {
+      const t = doc.data();
+      const amt = Number(t.amount || 0);
+      running += amt;
+
+      html += `
+        <tr>
+          <td>${t.date || ""}</td>
+          <td>${amt.toFixed(2)}</td>
+          <td>${t.category || ""}</td>
+          <td>${escapeHtml(t.description || "")}</td>
+          <td>${running.toFixed(2)}</td>
+        </tr>
+      `;
+    });
+
+    html += "</table>";
+
+    // If no rows
+    if (snap.size === 0) {
+      balanceTableEl.innerHTML = "No transactions found for account " + account;
+      return;
+    }
+
+    balanceTableEl.innerHTML = html;
+  } catch (e) {
+    console.error(e);
+    balanceTableEl.innerHTML = "Error ❌ " + e.message;
+  }
+};
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
