@@ -1007,13 +1007,7 @@
 
         // For P&L expenses people may put negative; we keep as given.
         // For AP tracking we use abs in calculations.
-        await addDoc(collection(db, "transactions"), payload);
-        okCount++;
-
-      el("importStatus").textContent = `✅ Imported: ${okCount} • Skipped (locked): ${skipCount} • Failed: ${failCount}`;
-      await refreshMonthlySummary();
-      await refreshVendorListDatalist();
-    });
+      
 
     // Export transactions (all or month)
     async function fetchTransactionsForExport({month="", account="ALL"}){
