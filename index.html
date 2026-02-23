@@ -5,16 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Accounting CRM</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 28px; max-width: 980px; }
+    body { font-family: Arial, sans-serif; margin: 22px; max-width: 1200px; }
     h1 { margin: 0 0 10px; }
+    .small { color:#666; font-size: 13px; }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
     .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin-top: 14px; }
     label { display:block; font-size: 13px; margin: 10px 0 6px; }
     input, select, textarea { width: 100%; padding: 10px; font-size: 15px; border: 1px solid #ccc; border-radius: 10px; }
     textarea { min-height: 70px; resize: vertical; }
     button { padding: 10px 14px; font-size: 15px; border-radius: 10px; border: 1px solid #ccc; cursor: pointer; }
     .actions { display:flex; gap:10px; align-items:center; margin-top: 12px; flex-wrap: wrap; }
-    .small { color:#666; font-size: 13px; }
     .list { margin-top: 10px; }
     .item { padding: 10px; border: 1px solid #eee; border-radius: 10px; margin-top: 8px; }
     .item b { display:inline-block; min-width: 90px; }
@@ -22,120 +23,366 @@
     .summaryBox { border:1px solid #eee; border-radius: 12px; padding: 12px; }
     .summaryBox .label { color:#666; font-size: 13px; }
     .summaryBox .value { font-size: 20px; margin-top: 6px; }
+
+    /* Tabs */
+    .tabs { display:flex; gap:10px; flex-wrap:wrap; margin-top: 10px; }
+    .tabBtn { background:#fff; }
+    .tabBtn.active { border-color:#111; font-weight:700; }
+    .tabPanel { display:none; }
+    .tabPanel.active { display:block; }
+
+    /* Tables */
+    table { width:100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border:1px solid #eee; padding: 10px; text-align:left; font-size: 14px; }
+    th { background:#fafafa; }
+    .right { text-align:right; }
+    .pill { display:inline-block; padding: 4px 8px; border-radius: 999px; border:1px solid #ddd; font-size: 12px; color:#444; }
+    .danger { color:#b00020; font-weight:700; }
+    .ok { color:#0b6b2f; font-weight:700; }
+    .muted { color:#777; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
   </style>
 </head>
 <body>
   <h1>Accounting CRM</h1>
-  <div class="small">Single-user mode ✅ (login later)</div>
+  <div class="small">Single-user mode ✅ (login later) • Firebase/Firestore ✅ • Import/Export ✅ • Vendor AP ✅ • Monthly Lock ✅</div>
 
-  <!-- ADD TRANSACTION -->
-  <div class="card">
-    <h3 style="margin:0 0 10px;">Add Transaction</h3>
+  <!-- TOP NAV -->
+  <div class="tabs" id="tabs">
+    <button class="tabBtn active" data-tab="dashboard">Dashboard</button>
+    <button class="tabBtn" data-tab="vendors">Vendors</button>
+    <button class="tabBtn" data-tab="ap">AP Summary</button>
+    <button class="tabBtn" data-tab="audit">Audit Monthly</button>
+    <button class="tabBtn" data-tab="importexport">Import/Export</button>
+    <button class="tabBtn" data-tab="archive">Archive</button>
+  </div>
 
-    <div class="row">
-      <div>
-        <label>Date</label>
-        <input id="date" type="date" />
+  <!-- DASHBOARD -->
+  <div class="tabPanel active" id="tab-dashboard">
+    <!-- ADD TRANSACTION -->
+    <div class="card">
+      <h3 style="margin:0 0 10px;">Add Transaction</h3>
+
+      <div class="row3">
+        <div>
+          <label>Date</label>
+          <input id="date" type="date" />
+        </div>
+        <div>
+          <label>Amount (use negative for expense)</label>
+          <input id="amount" type="number" step="0.01" placeholder="e.g. 1500 or -250.75" />
+        </div>
+        <div>
+          <label>Bank Account (last 4 digits)</label>
+          <select id="account">
+            <option value="8930">8930</option>
+            <option value="9081">9081</option>
+            <option value="OTHER">OTHER</option>
+          </select>
+        </div>
       </div>
-      <div>
-        <label>Amount (use negative for expense)</label>
-        <input id="amount" type="number" step="0.01" placeholder="e.g. 1500 or -250.75" />
+
+      <div class="row3">
+        <div>
+          <label>Vendor (AP)</label>
+          <input id="vendor" list="vendorList" placeholder="e.g. WENTWORTH TIRE SERVICES" />
+          <datalist id="vendorList"></datalist>
+          <div class="small">Optional for P&L only entries. Required for Vendor/AP tracking.</div>
+        </div>
+        <div>
+          <label>Vendor Txn Type (AP)</label>
+          <select id="txnType">
+            <option value="">(none)</option>
+            <option value="BILL">BILL (increases payable)</option>
+            <option value="PAYMENT">PAYMENT (decreases payable)</option>
+            <option value="CREDIT">CREDIT (decreases payable)</option>
+          </select>
+        </div>
+        <div>
+          <label>Reference # (invoice/check/bank ref)</label>
+          <input id="refNo" placeholder="e.g. INV12345 / CHECK 2555 / 90035199" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Category (P&L)</label>
+          <select id="category">
+            <option value="Sales">Sales</option>
+            <option value="Sales Reimbursement">Sales Reimbursement</option>
+            <option value="COGS">COGS</option>
+            <option value="Repairs & Maintenance">Repairs & Maintenance</option>
+            <option value="Fuel">Fuel</option>
+            <option value="Payroll">Payroll</option>
+            <option value="Contract Labor">Contract Labor</option>
+            <option value="Loan from Others">Loan from Others</option>
+            <option value="Internal Transfer">Internal Transfer</option>
+            <option value="Other Expense">Other Expense</option>
+            <option value="Other Income">Other Income</option>
+          </select>
+        </div>
+        <div>
+          <label>Vendor Group</label>
+          <select id="vendorGroup">
+            <option value="General">General</option>
+            <option value="China Parts">China Parts</option>
+            <option value="Paccar">Paccar</option>
+          </select>
+          <div class="small">This powers your “China Parts section” and “Paccar section”.</div>
+        </div>
+      </div>
+
+      <label>Description / Memo</label>
+      <textarea id="description" placeholder="e.g. Wentworth invoice / Zelle deposit / Transfer from CHK ..."></textarea>
+
+      <div class="actions">
+        <button id="saveBtn">Save</button>
+        <button id="clearBtn" type="button">Clear</button>
+        <span id="status"></span>
+        <span class="pill" id="lockBadge" title="If a month is locked, you cannot save transactions inside that month.">Lock: checking…</span>
       </div>
     </div>
 
-    <div class="row">
-      <div>
-        <label>Bank Account (last 4 digits)</label>
-        <select id="account">
-          <option value="8930">8930</option>
-          <option value="9081">9081</option>
-          <option value="OTHER">OTHER</option>
-        </select>
+    <!-- MONTHLY SUMMARY -->
+    <div class="card">
+      <div class="actions" style="margin-top:0;">
+        <h3 style="margin:0; flex:1;">Monthly P&L Summary (Category Logic)</h3>
+
+        <div style="min-width:220px;">
+          <label style="margin:0 0 6px;">Month</label>
+          <input id="monthPick" type="month" />
+        </div>
+
+        <div style="min-width:220px;">
+          <label style="margin:0 0 6px;">Account filter</label>
+          <select id="filterAccount">
+            <option value="ALL">All</option>
+            <option value="8930">8930</option>
+            <option value="9081">9081</option>
+            <option value="OTHER">OTHER</option>
+          </select>
+        </div>
       </div>
-      <div>
-        <label>Category</label>
-        <select id="category">
-          <option value="Sales">Sales</option>
-          <option value="Sales Reimbursement">Sales Reimbursement</option>
-          <option value="COGS">COGS</option>
-          <option value="Repairs & Maintenance">Repairs & Maintenance</option>
-          <option value="Fuel">Fuel</option>
-          <option value="Payroll">Payroll</option>
-          <option value="Contract Labor">Contract Labor</option>
-          <option value="Loan from Others">Loan from Others</option>
-          <option value="Internal Transfer">Internal Transfer</option>
-          <option value="Other Expense">Other Expense</option>
-          <option value="Other Income">Other Income</option>
-        </select>
+
+      <div class="summaryGrid">
+        <div class="summaryBox">
+          <div class="label">Income (Sales/Other Income/Reimb.)</div>
+          <div class="value" id="sumIncome">$0.00</div>
+        </div>
+        <div class="summaryBox">
+          <div class="label">Expenses (COGS/Payroll/etc.)</div>
+          <div class="value" id="sumExpense">$0.00</div>
+        </div>
+        <div class="summaryBox">
+          <div class="label">Net (Income − Expenses)</div>
+          <div class="value" id="sumNet">$0.00</div>
+        </div>
+      </div>
+
+      <div class="small" style="margin-top:8px;">
+        Loans and Internal Transfers are excluded from P&L totals ✅
       </div>
     </div>
 
-    <label>Description / Memo</label>
-    <textarea id="description" placeholder="e.g. Zelle deposit / Wentworth Tire invoice / Transfer from CHK ..."></textarea>
-
-    <div class="actions">
-      <button id="saveBtn">Save</button>
-      <button id="clearBtn" type="button">Clear</button>
-      <span id="status"></span>
+    <!-- RECENT TRANSACTIONS -->
+    <div class="card">
+      <div class="actions" style="margin-top:0;">
+        <h3 style="margin:0; flex:1;">Recent Transactions (last 10)</h3>
+        <div class="small">Uses the same account filter above</div>
+      </div>
+      <div id="list" class="list"></div>
     </div>
   </div>
 
-  <!-- MONTHLY SUMMARY -->
-  <div class="card">
-    <div class="actions" style="margin-top:0;">
-      <h3 style="margin:0; flex:1;">Monthly Summary (Accounting Logic)</h3>
-
-      <div style="min-width:220px;">
-        <label style="margin:0 0 6px;">Month</label>
-        <input id="monthPick" type="month" />
+  <!-- VENDORS -->
+  <div class="tabPanel" id="tab-vendors">
+    <div class="card">
+      <div class="actions" style="margin-top:0;">
+        <h3 style="margin:0; flex:1;">Vendors</h3>
+        <div style="min-width:260px;">
+          <label style="margin:0 0 6px;">Search vendor</label>
+          <input id="vendorSearch" placeholder="type vendor name…" />
+        </div>
+        <div style="min-width:220px;">
+          <label style="margin:0 0 6px;">Group filter</label>
+          <select id="vendorGroupFilter">
+            <option value="ALL">All</option>
+            <option value="General">General</option>
+            <option value="China Parts">China Parts</option>
+            <option value="Paccar">Paccar</option>
+          </select>
+        </div>
       </div>
 
-      <div style="min-width:220px;">
-        <label style="margin:0 0 6px;">Account filter</label>
-        <select id="filterAccount">
-          <option value="ALL">All</option>
-          <option value="8930">8930</option>
-          <option value="9081">9081</option>
-          <option value="OTHER">OTHER</option>
-        </select>
-      </div>
+      <div class="small">Click a vendor row to view ledger.</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Vendor</th>
+            <th>Group</th>
+            <th class="right">Balance Due</th>
+            <th class="right">Bills</th>
+            <th class="right">Payments</th>
+            <th class="right">Credits</th>
+          </tr>
+        </thead>
+        <tbody id="vendorTableBody"></tbody>
+      </table>
     </div>
 
-    <div class="summaryGrid">
-      <div class="summaryBox">
-        <div class="label">Income (Sales/Other Income/Reimb.)</div>
-        <div class="value" id="sumIncome">$0.00</div>
+    <div class="card">
+      <div class="actions" style="margin-top:0;">
+        <h3 style="margin:0; flex:1;">Vendor Ledger</h3>
+        <div class="pill" id="selectedVendorPill">No vendor selected</div>
       </div>
-      <div class="summaryBox">
-        <div class="label">Expenses (COGS/Payroll/etc.)</div>
-        <div class="value" id="sumExpense">$0.00</div>
-      </div>
-      <div class="summaryBox">
-        <div class="label">Net (Income − Expenses)</div>
-        <div class="value" id="sumNet">$0.00</div>
-      </div>
-    </div>
 
-    <div class="small" style="margin-top:8px;">
-      Loans and Internal Transfers are excluded from P&L totals ✅
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th class="right">Amount</th>
+            <th>Ref</th>
+            <th>Account</th>
+            <th>Category</th>
+            <th>Memo</th>
+          </tr>
+        </thead>
+        <tbody id="vendorLedgerBody"></tbody>
+      </table>
+      <div class="small muted">Ledger shows only transactions with Vendor + Txn Type (BILL/PAYMENT/CREDIT).</div>
     </div>
   </div>
 
-  <!-- RECENT TRANSACTIONS -->
-  <div class="card">
-    <div class="actions" style="margin-top:0;">
-      <h3 style="margin:0; flex:1;">Recent Transactions (last 10)</h3>
-      <div class="small">Uses the same account filter above</div>
+  <!-- AP SUMMARY -->
+  <div class="tabPanel" id="tab-ap">
+    <div class="card">
+      <div class="actions" style="margin-top:0;">
+        <h3 style="margin:0; flex:1;">AP Summary (Vendor → Balance Due)</h3>
+        <button id="refreshAPBtn" type="button">Refresh</button>
+        <button id="exportAPBtn" type="button">Export AP to Excel</button>
+        <button id="exportAPCsvBtn" type="button">Export AP to CSV</button>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Vendor</th>
+            <th>Group</th>
+            <th class="right">Balance (Payment Due)</th>
+          </tr>
+        </thead>
+        <tbody id="apBody"></tbody>
+      </table>
+      <div class="small muted">Balance = Bills − Payments − Credits. Negative means vendor owes you (credit).</div>
     </div>
-    <div id="list" class="list"></div>
   </div>
 
- 
+  <!-- AUDIT -->
+  <div class="tabPanel" id="tab-audit">
+    <div class="card">
+      <div class="actions" style="margin-top:0;">
+        <h3 style="margin:0; flex:1;">Audit Monthly (Lock / Unlock)</h3>
+        <div style="min-width:220px;">
+          <label style="margin:0 0 6px;">Month</label>
+          <input id="auditMonth" type="month" />
+        </div>
+        <button id="lockMonthBtn" type="button">Lock Month</button>
+        <button id="unlockMonthBtn" type="button">Unlock Month</button>
+        <span id="auditStatus" class="small"></span>
+      </div>
+
+      <div class="small">
+        When month is locked: you cannot save transactions with a date inside that month.
+        Use “Archive” tab to export a month snapshot.
+      </div>
+
+      <div class="card" style="border-style:dashed;">
+        <h4 style="margin:0 0 8px;">Locked Months</h4>
+        <div id="lockedMonthsList" class="small muted">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMPORT / EXPORT -->
+  <div class="tabPanel" id="tab-importexport">
+    <div class="card">
+      <h3 style="margin:0 0 10px;">Import Transactions (Excel/CSV)</h3>
+      <div class="small">
+        Best practice: import a clean table with these columns:
+        <span class="mono">date, amount, account, category, description, vendor, txnType, refNo, vendorGroup</span>
+      </div>
+
+      <div class="actions">
+        <input id="importFile" type="file" accept=".xlsx,.xls,.csv" />
+        <button id="importBtn" type="button">Import Now</button>
+        <span id="importStatus" class="small"></span>
+      </div>
+
+      <div class="card" style="border-style:dashed;">
+        <h4 style="margin:0 0 8px;">Download Import Template</h4>
+        <div class="actions">
+          <button id="downloadTemplateXlsx" type="button">Template (Excel)</button>
+          <button id="downloadTemplateCsv" type="button">Template (CSV)</button>
+        </div>
+        <div class="small muted">Use this template to avoid broken imports.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 10px;">Export Transactions (Excel/CSV)</h3>
+      <div class="row">
+        <div>
+          <label>Month (optional)</label>
+          <input id="exportMonth" type="month" />
+          <div class="small muted">Leave empty to export all.</div>
+        </div>
+        <div>
+          <label>Account filter</label>
+          <select id="exportAccount">
+            <option value="ALL">All</option>
+            <option value="8930">8930</option>
+            <option value="9081">9081</option>
+            <option value="OTHER">OTHER</option>
+          </select>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="exportXlsx" type="button">Export Excel</button>
+        <button id="exportCsv" type="button">Export CSV</button>
+        <span id="exportStatus" class="small"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARCHIVE -->
+  <div class="tabPanel" id="tab-archive">
+    <div class="card">
+      <div class="actions" style="margin-top:0;">
+        <h3 style="margin:0; flex:1;">Archive (Monthly Snapshot Export)</h3>
+        <div style="min-width:220px;">
+          <label style="margin:0 0 6px;">Month</label>
+          <input id="archiveMonth" type="month" />
+        </div>
+        <button id="archiveXlsxBtn" type="button">Export Month Archive (Excel)</button>
+        <button id="archiveCsvBtn" type="button">Export Month Archive (CSV)</button>
+        <span id="archiveStatus" class="small"></span>
+      </div>
+      <div class="small muted">
+        This creates a “frozen snapshot file” you can store as backup. Locking is controlled in Audit Monthly tab.
+      </div>
+    </div>
+  </div>
+
+  <!-- SheetJS for Excel import/export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import {
       getFirestore, collection, addDoc, serverTimestamp,
-      query, orderBy, limit, onSnapshot, where, getDocs
+      query, orderBy, limit, onSnapshot, where, getDocs,
+      doc, setDoc, deleteDoc
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -151,10 +398,6 @@
     const db = getFirestore(app);
 
     const el = (id) => document.getElementById(id);
-    const statusEl = el("status");
-    const listEl = el("list");
-    const filterEl = el("filterAccount");
-    const monthEl = el("monthPick");
 
     // ---------- CATEGORY RULES (Accounting Logic) ----------
     const INCOME_CATEGORIES = new Set(["Sales", "Other Income", "Sales Reimbursement"]);
@@ -162,19 +405,85 @@
     const EXCLUDED_CATEGORIES = new Set(["Loan from Others", "Internal Transfer"]);
     // ------------------------------------------------------
 
-    // defaults
-    el("date").value = new Date().toISOString().slice(0,10);
-    monthEl.value = new Date().toISOString().slice(0,7); // YYYY-MM
+    // Tabs
+    const tabButtons = Array.from(document.querySelectorAll(".tabBtn"));
+    const panels = {
+      dashboard: el("tab-dashboard"),
+      vendors: el("tab-vendors"),
+      ap: el("tab-ap"),
+      audit: el("tab-audit"),
+      importexport: el("tab-importexport"),
+      archive: el("tab-archive"),
+    };
 
+    tabButtons.forEach(btn => {
+      btn.addEventListener("click", async () => {
+        tabButtons.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        Object.values(panels).forEach(p => p.classList.remove("active"));
+        panels[btn.dataset.tab].classList.add("active");
+
+        // refresh when opening tabs
+        if (btn.dataset.tab === "vendors") await refreshVendors();
+        if (btn.dataset.tab === "ap") await refreshAP();
+        if (btn.dataset.tab === "audit") await refreshLockedMonthsUI();
+      });
+    });
+
+    // Defaults
+    el("date").value = new Date().toISOString().slice(0,10);
+    el("monthPick").value = new Date().toISOString().slice(0,7);
+    el("auditMonth").value = new Date().toISOString().slice(0,7);
+    el("exportMonth").value = "";
+    el("archiveMonth").value = new Date().toISOString().slice(0,7);
+
+    // Lock cache: set of "YYYY-MM"
+    const lockedMonths = new Set();
+
+    function monthKeyFromDate(dateStr){
+      // expects YYYY-MM-DD
+      return String(dateStr || "").slice(0,7);
+    }
+
+    async function loadLockedMonths(){
+      lockedMonths.clear();
+      const snap = await getDocs(collection(db, "locks"));
+      snap.forEach(d => lockedMonths.add(d.id)); // doc id = YYYY-MM
+      updateLockBadge();
+    }
+
+    function updateLockBadge(){
+      const mk = monthKeyFromDate(el("date").value);
+      if (!mk) return;
+      if (lockedMonths.has(mk)){
+        el("lockBadge").textContent = "Lock: " + mk + " LOCKED";
+        el("lockBadge").classList.add("danger");
+        el("lockBadge").classList.remove("ok");
+      } else {
+        el("lockBadge").textContent = "Lock: " + mk + " open";
+        el("lockBadge").classList.remove("danger");
+        el("lockBadge").classList.add("ok");
+      }
+    }
+
+    el("date").addEventListener("change", updateLockBadge);
+
+    // Clear
     el("clearBtn").onclick = () => {
       el("amount").value = "";
       el("description").value = "";
       el("account").value = "8930";
       el("category").value = "Sales";
+      el("vendor").value = "";
+      el("txnType").value = "";
+      el("refNo").value = "";
+      el("vendorGroup").value = "General";
       el("date").value = new Date().toISOString().slice(0,10);
-      statusEl.textContent = "";
+      el("status").textContent = "";
+      updateLockBadge();
     };
 
+    // Save
     el("saveBtn").onclick = async () => {
       const date = el("date").value.trim();
       const amountStr = el("amount").value.trim();
@@ -183,47 +492,85 @@
       const category = el("category").value;
       const description = el("description").value.trim();
 
-      if (!date) return statusEl.textContent = "❌ Date required";
-      if (!amountStr || Number.isNaN(amount)) return statusEl.textContent = "❌ Amount required";
-      if (!description) return statusEl.textContent = "❌ Description required";
+      const vendor = el("vendor").value.trim();
+      const txnType = el("txnType").value;
+      const refNo = el("refNo").value.trim();
+      const vendorGroup = el("vendorGroup").value;
+
+      const mk = monthKeyFromDate(date);
+      if (lockedMonths.has(mk)){
+        el("status").textContent = "❌ Month is locked: " + mk;
+        return;
+      }
+
+      if (!date) return el("status").textContent = "❌ Date required";
+      if (!amountStr || Number.isNaN(amount)) return el("status").textContent = "❌ Amount required";
+      if (!description) return el("status").textContent = "❌ Description required";
+
+      // If vendor is provided, require txnType for AP accuracy
+      if (vendor && !txnType){
+        el("status").textContent = "❌ If Vendor is filled, choose Txn Type (BILL/PAYMENT/CREDIT)";
+        return;
+      }
 
       try {
-        const docRef = await addDoc(collection(db, "transactions"), {
+        const payload = {
           date, amount, account, category, description,
           createdAt: serverTimestamp()
-        });
-        statusEl.textContent = "✅ Saved: " + docRef.id;
+        };
+
+        // Optional new fields (backward compatible)
+        if (vendor) payload.vendor = vendor;
+        if (txnType) payload.txnType = txnType;
+        if (refNo) payload.refNo = refNo;
+        if (vendorGroup) payload.vendorGroup = vendorGroup;
+
+        const docRef = await addDoc(collection(db, "transactions"), payload);
+
+        el("status").textContent = "✅ Saved: " + docRef.id;
         el("amount").value = "";
         el("description").value = "";
         await refreshMonthlySummary();
+        await refreshVendorListDatalist();
       } catch (e) {
         console.error(e);
-        statusEl.textContent = "❌ " + e.message;
+        el("status").textContent = "❌ " + e.message;
       }
     };
 
-    // ----- Recent list with filter -----
+    // Recent list
     let unsubscribe = null;
 
+    function escapeHtml(str){
+      return String(str)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
     function renderList(snap){
-      listEl.innerHTML = "";
-      snap.forEach((doc) => {
-        const t = doc.data();
+      el("list").innerHTML = "";
+      snap.forEach((docSnap) => {
+        const t = docSnap.data();
         const div = document.createElement("div");
         div.className = "item";
         div.innerHTML = `
           <div><b>Date:</b> ${t.date || ""}</div>
           <div><b>Amount:</b> ${t.amount ?? ""}</div>
           <div><b>Acct:</b> ${t.account || ""} &nbsp; <b>Cat:</b> ${t.category || ""}</div>
+          <div><b>Vendor:</b> ${escapeHtml(t.vendor || "")} <span class="muted">${t.txnType ? "(" + t.txnType + ")" : ""}</span></div>
+          <div><b>Ref:</b> ${escapeHtml(t.refNo || "")}</div>
           <div><b>Memo:</b> ${escapeHtml(t.description || "")}</div>
         `;
-        listEl.appendChild(div);
+        el("list").appendChild(div);
       });
     }
 
     function subscribeRecent(){
       if (unsubscribe) unsubscribe();
-      const selected = filterEl.value;
+      const selected = el("filterAccount").value;
 
       let q;
       if (selected === "ALL") {
@@ -236,11 +583,10 @@
           limit(10)
         );
       }
-
       unsubscribe = onSnapshot(q, renderList);
     }
 
-    // ----- Monthly summary (category-based) -----
+    // Monthly summary
     function monthRange(monthValue){
       const [y, m] = monthValue.split("-").map(Number);
       const start = `${y}-${String(m).padStart(2,"0")}-01`;
@@ -255,9 +601,9 @@
     }
 
     async function refreshMonthlySummary(){
-      const monthValue = monthEl.value;
+      const monthValue = el("monthPick").value;
       const { start, end } = monthRange(monthValue);
-      const selected = filterEl.value;
+      const selected = el("filterAccount").value;
 
       let q;
       if (selected === "ALL") {
@@ -280,8 +626,8 @@
       let income = 0;
       let expense = 0;
 
-      snap.forEach((doc) => {
-        const t = doc.data();
+      snap.forEach((d) => {
+        const t = d.data();
         const amt = Number(t.amount || 0);
         const cat = String(t.category || "");
 
@@ -291,7 +637,6 @@
           income += Math.abs(amt);
           return;
         }
-
         if (EXPENSE_CATEGORIES.has(cat)) {
           expense += Math.abs(amt);
           return;
@@ -303,23 +648,397 @@
       el("sumNet").textContent = money(income - expense);
     }
 
-    filterEl.addEventListener("change", async () => {
+    el("filterAccount").addEventListener("change", async () => {
       subscribeRecent();
       await refreshMonthlySummary();
     });
+    el("monthPick").addEventListener("change", refreshMonthlySummary);
 
-    monthEl.addEventListener("change", refreshMonthlySummary);
-
-
-
-    function escapeHtml(str){
-      return String(str)
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
+    // Vendor datalist
+    async function refreshVendorListDatalist(){
+      const snap = await getDocs(collection(db, "transactions"));
+      const vendors = new Set();
+      snap.forEach(d => {
+        const v = (d.data().vendor || "").trim();
+        if (v) vendors.add(v);
+      });
+      const list = el("vendorList");
+      list.innerHTML = "";
+      Array.from(vendors).sort().forEach(v => {
+        const opt = document.createElement("option");
+        opt.value = v;
+        list.appendChild(opt);
+      });
     }
+
+    // Build Vendor aggregates for AP
+    function apSign(txnType, amount){
+      const a = Math.abs(Number(amount || 0));
+      if (txnType === "BILL") return +a;
+      if (txnType === "PAYMENT") return -a;
+      if (txnType === "CREDIT") return -a;
+      return 0;
+    }
+
+    async function computeVendorAggregates(){
+      const snap = await getDocs(collection(db, "transactions"));
+      const map = new Map(); // vendor -> {group, balance, bills, payments, credits, items[]}
+
+      snap.forEach(d => {
+        const t = d.data();
+        const vendor = (t.vendor || "").trim();
+        const txnType = (t.txnType || "").trim();
+        if (!vendor || !txnType) return;
+
+        const group = t.vendorGroup || "General";
+        if (!map.has(vendor)){
+          map.set(vendor, { vendor, group, balance:0, bills:0, payments:0, credits:0, items:[] });
+        }
+        const obj = map.get(vendor);
+        obj.group = obj.group || group;
+
+        const a = Math.abs(Number(t.amount || 0));
+        if (txnType === "BILL") obj.bills += a;
+        if (txnType === "PAYMENT") obj.payments += a;
+        if (txnType === "CREDIT") obj.credits += a;
+
+        obj.balance += apSign(txnType, t.amount);
+        obj.items.push({
+          date: t.date || "",
+          txnType,
+          amount: a,
+          refNo: t.refNo || "",
+          account: t.account || "",
+          category: t.category || "",
+          description: t.description || ""
+        });
+      });
+
+      // sort ledger items
+      map.forEach(v => v.items.sort((a,b) => (a.date||"").localeCompare(b.date||"")));
+      return map;
+    }
+
+    // Vendors UI
+    let vendorAggCache = new Map();
+    let selectedVendor = "";
+
+    async function refreshVendors(){
+      vendorAggCache = await computeVendorAggregates();
+      const body = el("vendorTableBody");
+      body.innerHTML = "";
+
+      const search = (el("vendorSearch").value || "").toLowerCase().trim();
+      const groupFilter = el("vendorGroupFilter").value;
+
+      const rows = Array.from(vendorAggCache.values())
+        .filter(v => !search || v.vendor.toLowerCase().includes(search))
+        .filter(v => groupFilter === "ALL" || (v.group || "General") === groupFilter)
+        .sort((a,b) => Math.abs(b.balance) - Math.abs(a.balance));
+
+      rows.forEach(v => {
+        const tr = document.createElement("tr");
+        tr.style.cursor = "pointer";
+        tr.innerHTML = `
+          <td>${escapeHtml(v.vendor)}</td>
+          <td>${escapeHtml(v.group || "General")}</td>
+          <td class="right ${v.balance > 0 ? "danger" : ""}">${money(v.balance)}</td>
+          <td class="right">${money(v.bills)}</td>
+          <td class="right">${money(v.payments)}</td>
+          <td class="right">${money(v.credits)}</td>
+        `;
+        tr.addEventListener("click", () => {
+          selectedVendor = v.vendor;
+          el("selectedVendorPill").textContent = "Selected: " + selectedVendor;
+          renderVendorLedger(selectedVendor);
+        });
+        body.appendChild(tr);
+      });
+
+      if (selectedVendor && vendorAggCache.has(selectedVendor)){
+        renderVendorLedger(selectedVendor);
+      } else {
+        el("vendorLedgerBody").innerHTML = "";
+        el("selectedVendorPill").textContent = "No vendor selected";
+      }
+    }
+
+    function renderVendorLedger(vendorName){
+      const v = vendorAggCache.get(vendorName);
+      if (!v) return;
+      const body = el("vendorLedgerBody");
+      body.innerHTML = "";
+      v.items.forEach(it => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${escapeHtml(it.date)}</td>
+          <td>${escapeHtml(it.txnType)}</td>
+          <td class="right">${money(it.amount)}</td>
+          <td>${escapeHtml(it.refNo)}</td>
+          <td>${escapeHtml(it.account)}</td>
+          <td>${escapeHtml(it.category)}</td>
+          <td>${escapeHtml(it.description)}</td>
+        `;
+        body.appendChild(tr);
+      });
+    }
+
+    el("vendorSearch").addEventListener("input", refreshVendors);
+    el("vendorGroupFilter").addEventListener("change", refreshVendors);
+
+    // AP Summary UI
+    async function refreshAP(){
+      vendorAggCache = await computeVendorAggregates();
+      const apBody = el("apBody");
+      apBody.innerHTML = "";
+
+      const rows = Array.from(vendorAggCache.values())
+        .sort((a,b) => Math.abs(b.balance) - Math.abs(a.balance));
+
+      rows.forEach(v => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${escapeHtml(v.vendor)}</td>
+          <td>${escapeHtml(v.group || "General")}</td>
+          <td class="right ${v.balance > 0 ? "danger" : ""}">${money(v.balance)}</td>
+        `;
+        apBody.appendChild(tr);
+      });
+    }
+
+    el("refreshAPBtn").addEventListener("click", refreshAP);
+
+    // Locks UI
+    async function refreshLockedMonthsUI(){
+      await loadLockedMonths();
+      const list = Array.from(lockedMonths).sort();
+      el("lockedMonthsList").innerHTML = list.length
+        ? list.map(m => `<div>🔒 ${m}</div>`).join("")
+        : "No locked months.";
+      const mk = el("auditMonth").value;
+      el("auditStatus").textContent = lockedMonths.has(mk) ? `🔒 ${mk} is LOCKED` : `✅ ${mk} is open`;
+    }
+
+    el("auditMonth").addEventListener("change", refreshLockedMonthsUI);
+
+    el("lockMonthBtn").addEventListener("click", async () => {
+      const mk = el("auditMonth").value;
+      if (!mk) return;
+      await setDoc(doc(db, "locks", mk), { lockedAt: serverTimestamp() });
+      await refreshLockedMonthsUI();
+      updateLockBadge();
+    });
+
+    el("unlockMonthBtn").addEventListener("click", async () => {
+      const mk = el("auditMonth").value;
+      if (!mk) return;
+      await deleteDoc(doc(db, "locks", mk));
+      await refreshLockedMonthsUI();
+      updateLockBadge();
+    });
+
+    // Import / Export helpers
+    function normalizeRow(row){
+      // Accept many header styles; return consistent schema
+      const get = (k) => row[k] ?? row[k.toLowerCase()] ?? row[k.toUpperCase()];
+      const out = {};
+
+      out.date = String(get("date") || "").slice(0,10);
+      out.amount = Number(get("amount") || 0);
+      out.account = String(get("account") || "OTHER");
+      out.category = String(get("category") || "Other Expense");
+      out.description = String(get("description") || get("memo") || "");
+      out.vendor = String(get("vendor") || "").trim();
+      out.txnType = String(get("txnType") || get("txntype") || get("type") || "").trim().toUpperCase();
+      out.refNo = String(get("refNo") || get("ref") || get("reference") || "").trim();
+      out.vendorGroup = String(get("vendorGroup") || get("group") || "General").trim();
+
+      // Clean txnType values
+      if (!["BILL","PAYMENT","CREDIT"].includes(out.txnType)) out.txnType = out.vendor ? out.txnType : "";
+
+      // Basic validation
+      if (!out.date || !String(out.date).includes("-")) return { ok:false, reason:"bad date" };
+      if (Number.isNaN(out.amount)) return { ok:false, reason:"bad amount" };
+      if (!out.description) return { ok:false, reason:"missing description" };
+
+      return { ok:true, data: out };
+    }
+
+    function jsonToSheetAndDownload(rows, filename){
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(rows);
+      XLSX.utils.book_append_sheet(wb, ws, "data");
+      XLSX.writeFile(wb, filename);
+    }
+
+    function jsonToCsvDownload(rows, filename){
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const csv = XLSX.utils.sheet_to_csv(ws);
+      const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    // Template downloads
+    const TEMPLATE_ROWS = [{
+      date: "2026-01-21",
+      amount: -2730.00,
+      account: "8930",
+      category: "COGS",
+      description: "Wentworth invoice",
+      vendor: "WENTWORTH TIRE SERVICES",
+      txnType: "BILL",
+      refNo: "INV12345",
+      vendorGroup: "General"
+    },{
+      date: "2026-01-22",
+      amount: -4592.20,
+      account: "8930",
+      category: "COGS",
+      description: "Wentworth payment from bank",
+      vendor: "WENTWORTH TIRE SERVICES",
+      txnType: "PAYMENT",
+      refNo: "90035199",
+      vendorGroup: "General"
+    }];
+
+    el("downloadTemplateXlsx").addEventListener("click", () => {
+      jsonToSheetAndDownload(TEMPLATE_ROWS, "transactions_import_template.xlsx");
+    });
+    el("downloadTemplateCsv").addEventListener("click", () => {
+      jsonToCsvDownload(TEMPLATE_ROWS, "transactions_import_template.csv");
+    });
+
+    // Import
+    el("importBtn").addEventListener("click", async () => {
+      const f = el("importFile").files?.[0];
+      if (!f) { el("importStatus").textContent = "❌ Select a file first"; return; }
+
+      // Load locks before import to prevent locked-month writes
+      await loadLockedMonths();
+
+      el("importStatus").textContent = "Reading file…";
+      const data = await f.arrayBuffer();
+      const wb = XLSX.read(data, { type:"array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval:"" });
+
+      let okCount = 0, skipCount = 0, failCount = 0;
+      for (const r of rows){
+        const norm = normalizeRow(r);
+        if (!norm.ok){ failCount++; continue; }
+
+        const mk = monthKeyFromDate(norm.data.date);
+        if (lockedMonths.has(mk)){ skipCount++; continue; }
+
+        const payload = {
+          ...norm.data,
+          createdAt: serverTimestamp()
+        };
+
+        // For P&L expenses people may put negative; we keep as given.
+        // For AP tracking we use abs in calculations.
+        await addDoc(collection(db, "transactions"), payload);
+        okCount++;
+      }
+
+      el("importStatus").textContent = `✅ Imported: ${okCount} • Skipped (locked): ${skipCount} • Failed: ${failCount}`;
+      await refreshMonthlySummary();
+      await refreshVendorListDatalist();
+    });
+
+    // Export transactions (all or month)
+    async function fetchTransactionsForExport({month="", account="ALL"}){
+      let baseQuery = query(collection(db, "transactions"));
+      const snap = await getDocs(baseQuery);
+
+      const out = [];
+      snap.forEach(d => {
+        const t = d.data();
+        if (month && monthKeyFromDate(t.date) !== month) return;
+        if (account !== "ALL" && (t.account || "OTHER") !== account) return;
+
+        out.push({
+          date: t.date || "",
+          amount: Number(t.amount || 0),
+          account: t.account || "OTHER",
+          category: t.category || "",
+          description: t.description || "",
+          vendor: t.vendor || "",
+          txnType: t.txnType || "",
+          refNo: t.refNo || "",
+          vendorGroup: t.vendorGroup || "General"
+        });
+      });
+
+      out.sort((a,b) => (a.date||"").localeCompare(b.date||""));
+      return out;
+    }
+
+    el("exportXlsx").addEventListener("click", async () => {
+      const month = el("exportMonth").value || "";
+      const account = el("exportAccount").value || "ALL";
+      el("exportStatus").textContent = "Preparing export…";
+      const rows = await fetchTransactionsForExport({month, account});
+      jsonToSheetAndDownload(rows, `transactions_export${month ? "_" + month : ""}.xlsx`);
+      el("exportStatus").textContent = `✅ Exported ${rows.length} rows`;
+    });
+
+    el("exportCsv").addEventListener("click", async () => {
+      const month = el("exportMonth").value || "";
+      const account = el("exportAccount").value || "ALL";
+      el("exportStatus").textContent = "Preparing export…";
+      const rows = await fetchTransactionsForExport({month, account});
+      jsonToCsvDownload(rows, `transactions_export${month ? "_" + month : ""}.csv`);
+      el("exportStatus").textContent = `✅ Exported ${rows.length} rows`;
+    });
+
+    // Export AP summary
+    async function exportAPRows(){
+      const agg = await computeVendorAggregates();
+      const rows = Array.from(agg.values())
+        .sort((a,b) => Math.abs(b.balance) - Math.abs(a.balance))
+        .map(v => ({
+          vendor: v.vendor,
+          group: v.group || "General",
+          balance_due: Number(v.balance.toFixed(2))
+        }));
+      return rows;
+    }
+
+    el("exportAPBtn").addEventListener("click", async () => {
+      const rows = await exportAPRows();
+      jsonToSheetAndDownload(rows, "ap_summary.xlsx");
+    });
+
+    el("exportAPCsvBtn").addEventListener("click", async () => {
+      const rows = await exportAPRows();
+      jsonToCsvDownload(rows, "ap_summary.csv");
+    });
+
+    // Archive export (month snapshot)
+    async function exportArchive(kind){
+      const month = el("archiveMonth").value;
+      if (!month){ el("archiveStatus").textContent = "❌ Choose a month"; return; }
+      el("archiveStatus").textContent = "Preparing archive…";
+      const rows = await fetchTransactionsForExport({month, account:"ALL"});
+      if (kind === "xlsx") jsonToSheetAndDownload(rows, `ARCHIVE_${month}.xlsx`);
+      if (kind === "csv") jsonToCsvDownload(rows, `ARCHIVE_${month}.csv`);
+      el("archiveStatus").textContent = `✅ Archive exported: ${rows.length} rows`;
+    }
+    el("archiveXlsxBtn").addEventListener("click", () => exportArchive("xlsx"));
+    el("archiveCsvBtn").addEventListener("click", () => exportArchive("csv"));
+
+    // Init
+    await loadLockedMonths();
+    subscribeRecent();
+    await refreshMonthlySummary();
+    await refreshVendorListDatalist();
+    await refreshLockedMonthsUI();
+    updateLockBadge();
   </script>
 </body>
 </html>
