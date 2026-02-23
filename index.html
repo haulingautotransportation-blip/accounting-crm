@@ -1,19 +1,92 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Accounting CRM</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 28px; max-width: 980px; }
+    h1 { margin: 0 0 10px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin-top: 14px; }
+    label { display:block; font-size: 13px; margin: 10px 0 6px; }
+    input, select, textarea { width: 100%; padding: 10px; font-size: 15px; border: 1px solid #ccc; border-radius: 10px; }
+    textarea { min-height: 70px; resize: vertical; }
+    button { padding: 10px 14px; font-size: 15px; border-radius: 10px; border: 1px solid #ccc; cursor: pointer; }
+    .actions { display:flex; gap:10px; align-items:center; margin-top: 12px; }
+    #status { margin-top: 10px; }
+    .small { color:#666; font-size: 13px; }
+    .list { margin-top: 10px; }
+    .item { padding: 10px; border: 1px solid #eee; border-radius: 10px; margin-top: 8px; }
+    .item b { display:inline-block; min-width: 90px; }
+  </style>
 </head>
 <body>
   <h1>Accounting CRM</h1>
-  <p id="status">System Ready ✅</p>
+  <div class="small">Single-user mode ✅ (we’ll add login later)</div>
 
-  <button id="addBtn">Add test transaction</button>
+  <div class="card">
+    <h3 style="margin:0 0 10px;">Add Transaction</h3>
+
+    <div class="row">
+      <div>
+        <label>Date</label>
+        <input id="date" type="date" />
+      </div>
+      <div>
+        <label>Amount (use negative for expense)</label>
+        <input id="amount" type="number" step="0.01" placeholder="e.g. 1500 or -250.75" />
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Bank Account (last 4 digits)</label>
+        <select id="account">
+          <option value="8930">8930</option>
+          <option value="9081">9081</option>
+          <option value="OTHER">OTHER</option>
+        </select>
+      </div>
+      <div>
+        <label>Category</label>
+        <select id="category">
+          <option value="Sales">Sales</option>
+          <option value="Sales Reimbursement">Sales Reimbursement</option>
+          <option value="COGS">COGS</option>
+          <option value="Repairs & Maintenance">Repairs & Maintenance</option>
+          <option value="Fuel">Fuel</option>
+          <option value="Payroll">Payroll</option>
+          <option value="Contract Labor">Contract Labor</option>
+          <option value="Loan from Others">Loan from Others</option>
+          <option value="Internal Transfer">Internal Transfer</option>
+          <option value="Other Expense">Other Expense</option>
+          <option value="Other Income">Other Income</option>
+        </select>
+      </div>
+    </div>
+
+    <label>Description / Memo</label>
+    <textarea id="description" placeholder="e.g. Zelle deposit / Wentworth Tire invoice / Transfer from CHK ..."></textarea>
+
+    <div class="actions">
+      <button id="saveBtn">Save</button>
+      <button id="clearBtn" type="button">Clear</button>
+      <span id="status"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 10px;">Recent Transactions (last 10)</h3>
+    <div id="list" class="list"></div>
+  </div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import {
+      getFirestore, collection, addDoc, serverTimestamp,
+      query, orderBy, limit, onSnapshot
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBZti11UlAEp5_7fcB9r8l7i1HpIQxhLwg",
@@ -27,21 +100,75 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    document.getElementById("addBtn").onclick = async () => {
+    const el = (id) => document.getElementById(id);
+    const statusEl = el("status");
+
+    // Set default date = today
+    const today = new Date();
+    el("date").value = today.toISOString().slice(0,10);
+
+    el("clearBtn").onclick = () => {
+      el("amount").value = "";
+      el("description").value = "";
+      el("account").value = "8930";
+      el("category").value = "Sales";
+      el("date").value = new Date().toISOString().slice(0,10);
+      statusEl.textContent = "";
+    };
+
+    el("saveBtn").onclick = async () => {
+      const date = el("date").value.trim();
+      const amountStr = el("amount").value.trim();
+      const amount = Number(amountStr);
+      const account = el("account").value;
+      const category = el("category").value;
+      const description = el("description").value.trim();
+
+      if (!date) return statusEl.textContent = "❌ Date required";
+      if (!amountStr || Number.isNaN(amount)) return statusEl.textContent = "❌ Amount required";
+      if (!description) return statusEl.textContent = "❌ Description required";
+
       try {
         const docRef = await addDoc(collection(db, "transactions"), {
-          date: "2025-12-31",
-          amount: 100.00,
-          description: "TEST deposit",
-          account: "8930",
+          date, amount, account, category, description,
           createdAt: serverTimestamp()
         });
-        document.getElementById("status").textContent = "Saved ✅ ID: " + docRef.id;
+        statusEl.textContent = "✅ Saved: " + docRef.id;
+        el("amount").value = "";
+        el("description").value = "";
       } catch (e) {
-        document.getElementById("status").textContent = "Error ❌ " + e.message;
         console.error(e);
+        statusEl.textContent = "❌ " + e.message;
       }
     };
+
+    // Live list (last 10)
+    const q = query(collection(db, "transactions"), orderBy("createdAt", "desc"), limit(10));
+    onSnapshot(q, (snap) => {
+      const list = el("list");
+      list.innerHTML = "";
+      snap.forEach((doc) => {
+        const t = doc.data();
+        const div = document.createElement("div");
+        div.className = "item";
+        div.innerHTML = `
+          <div><b>Date:</b> ${t.date}</div>
+          <div><b>Amount:</b> ${t.amount}</div>
+          <div><b>Acct:</b> ${t.account} &nbsp; <b>Cat:</b> ${t.category}</div>
+          <div><b>Memo:</b> ${escapeHtml(t.description || "")}</div>
+        `;
+        list.appendChild(div);
+      });
+    });
+
+    function escapeHtml(str){
+      return String(str)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
   </script>
 </body>
 </html>
