@@ -1040,7 +1040,7 @@
       const month = el("exportMonth").value || "";
       const account = el("exportAccount").value || "ALL";
       el("exportStatus").textContent = "Preparing export…";
-      const rows = await fetchTransactionsForExport({month, account});
+      const rows = await fetchTransactionsForExport({ month: month, account: account });
       jsonToSheetAndDownload(rows, `transactions_export${month ? "_" + month : ""}.xlsx`);
       el("exportStatus").textContent = `✅ Exported ${rows.length} rows`;
     });
