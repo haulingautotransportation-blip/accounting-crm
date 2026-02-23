@@ -28,6 +28,7 @@
   <h1>Accounting CRM</h1>
   <div class="small">Single-user mode ✅ (we’ll add login later)</div>
 
+  <!-- ADD TRANSACTION -->
   <div class="card">
     <h3 style="margin:0 0 10px;">Add Transaction</h3>
 
@@ -79,6 +80,7 @@
     </div>
   </div>
 
+  <!-- MONTHLY SUMMARY -->
   <div class="card">
     <div class="actions" style="margin-top:0;">
       <h3 style="margin:0; flex:1;">Monthly Summary</h3>
@@ -115,10 +117,11 @@
     </div>
 
     <div class="small" style="margin-top:8px;">
-      Note: this summary reads transactions in the selected month. (We’ll optimize later.)
+      Note: Summary uses positive/negative amount. (We can upgrade to category-based accounting logic next.)
     </div>
   </div>
 
+  <!-- RECENT TRANSACTIONS -->
   <div class="card">
     <div class="actions" style="margin-top:0;">
       <h3 style="margin:0; flex:1;">Recent Transactions (last 10)</h3>
@@ -134,6 +137,7 @@
       query, orderBy, limit, onSnapshot, where, getDocs
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
+    // ✅ YOUR FIREBASE CONFIG (current)
     const firebaseConfig = {
       apiKey: "AIzaSyBZti11UlAEp5_7fcB9r8l7i1HpIQxhLwg",
       authDomain: "accounting-crm-web.firebaseapp.com",
@@ -185,7 +189,7 @@
         statusEl.textContent = "✅ Saved: " + docRef.id;
         el("amount").value = "";
         el("description").value = "";
-        await refreshMonthlySummary(); // update after save
+        await refreshMonthlySummary();
       } catch (e) {
         console.error(e);
         statusEl.textContent = "❌ " + e.message;
@@ -232,7 +236,6 @@
 
     // ----- Monthly summary -----
     function monthRange(monthValue){
-      // monthValue: "YYYY-MM"
       const [y, m] = monthValue.split("-").map(Number);
       const start = `${y}-${String(m).padStart(2,"0")}-01`;
       const endDate = new Date(y, m, 0); // last day of month
@@ -290,6 +293,7 @@
 
     monthEl.addEventListener("change", refreshMonthlySummary);
 
+    // start
     subscribeRecent();
     refreshMonthlySummary();
 
