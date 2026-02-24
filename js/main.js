@@ -1,4 +1,3 @@
-<script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import {
       getFirestore, collection, addDoc, serverTimestamp,
@@ -981,4 +980,3 @@
     await refreshLockedMonthsUI();
     applyEditModeUI();
     updateLockBadge();
-  </script>
