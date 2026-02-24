@@ -839,30 +839,76 @@
 
     // Import / Export helpers
     function normalizeRow(row){
-      // Accept many header styles; return consistent schema
-      const get = (k) => row[k] ?? row[k.toLowerCase()] ?? row[k.toUpperCase()];
-      const out = {};
-
-      out.date = String(get("date") || "").slice(0,10);
-      out.amount = Number(get("amount") || 0);
-      out.account = String(get("account") || "OTHER");
-      out.category = String(get("category") || "Other Expense");
-      out.description = String(get("description") || get("memo") || "");
-      out.vendor = String(get("vendor") || "").trim();
-      out.txnType = String(get("txnType") || get("txntype") || get("type") || "").trim().toUpperCase();
-      out.refNo = String(get("refNo") || get("ref") || get("reference") || "").trim();
-      out.vendorGroup = String(get("vendorGroup") || get("group") || "General").trim();
-
-      // Clean txnType values
-      if (!["BILL","PAYMENT","CREDIT"].includes(out.txnType)) out.txnType = out.vendor ? out.txnType : "";
-
-      // Basic validation
-      if (!out.date || !String(out.date).includes("-")) return { ok:false, reason:"bad date" };
-      if (Number.isNaN(out.amount)) return { ok:false, reason:"bad amount" };
-      if (!out.description) return { ok:false, reason:"missing description" };
-
-      return { ok:true, data: out };
+  // helper to read different header names
+  const pick = (...keys) => {
+    for (const k of keys){
+      if (row[k] !== undefined && row[k] !== null && row[k] !== "") return row[k];
+      const lk = String(k).toLowerCase();
+      for (const rk of Object.keys(row)){
+        if (String(rk).toLowerCase().trim() === lk) return row[rk];
+      }
     }
+    return "";
+  };
+
+  // Date (supports Date, Posting Date, Transaction Date)
+  let rawDate = pick("date","Date","Posting Date","Transaction Date","Trans Date");
+  let date = "";
+
+  // If excel gives Date object or serial number
+  if (rawDate instanceof Date){
+    date = rawDate.toISOString().slice(0,10);
+  } else {
+    const s = String(rawDate).trim();
+    // try YYYY-MM-DD already
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) date = s;
+    // try MM/DD/YYYY
+    else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
+      const [mm,dd,yyyy] = s.split("/");
+      date = `${yyyy}-${String(mm).padStart(2,"0")}-${String(dd).padStart(2,"0")}`;
+    }
+  }
+
+  // Description / memo
+  const description = String(pick("description","Description","Memo","Details","Transaction","Name","Payee")).trim();
+
+  // Amount (supports Amount OR Debit/Credit columns)
+  let amountVal = pick("amount","Amount");
+  let amount = Number(amountVal);
+
+  if (Number.isNaN(amount) || amountVal === "") {
+    const debit = Number(pick("debit","Debit","Withdrawal","Withdrawals","Money Out","Out"));
+    const credit = Number(pick("credit","Credit","Deposit","Deposits","Money In","In"));
+    const d = Number.isNaN(debit) ? 0 : debit;
+    const c = Number.isNaN(credit) ? 0 : credit;
+    // debit should be negative, credit positive
+    amount = (c !== 0 ? c : 0) - (d !== 0 ? d : 0);
+  }
+
+  if (!date) return { ok:false, reason:"bad date" };
+  if (!description) return { ok:false, reason:"missing description" };
+  if (Number.isNaN(amount)) return { ok:false, reason:"bad amount" };
+
+  const out = {};
+  out.date = date;
+  out.amount = amount;
+
+  // Optional fields (safe defaults)
+  out.account = String(pick("account","Account","Acct","Bank","last4") || "OTHER").trim() || "OTHER";
+  out.category = String(pick("category","Category") || "Other Expense").trim() || "Other Expense";
+  out.vendor = String(pick("vendor","Vendor","Payee","Name") || "").trim();
+  out.txnType = String(pick("txnType","TxnType","Type") || "").trim().toUpperCase();
+  out.refNo = String(pick("refNo","Ref","Reference","Check #","Check Number") || "").trim();
+  out.vendorGroup = String(pick("vendorGroup","Group") || "General").trim() || "General";
+  out.description = description;
+
+  // normalize txnType
+  if (!["BILL","PAYMENT","CREDIT"].includes(out.txnType)) {
+    out.txnType = out.vendor ? out.txnType : "";
+  }
+
+  return { ok:true, data: out };
+}
 
     function jsonToSheetAndDownload(rows, filename){
       const wb = XLSX.utils.book_new();
