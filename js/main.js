@@ -431,14 +431,31 @@ async function refreshAPLedgerPage(){
   if (!el("apLedgerVendorsBody")) return;
 
   el("apLedgerStatus").textContent = "Loading vendors…";
+
+  // 1) Load vendors from vendors collection (works even if no transactions yet)
+  const vendors = await loadVendorsList();
+
+  // 2) Load balances from transactions
   apAggCache = await computeVendorAggregates();
 
   const search = (el("apVendorSearch")?.value || "").toLowerCase().trim();
   const groupFilter = el("apVendorGroupFilter")?.value || "ALL";
 
-  const rows = Array.from(apAggCache.values())
-    .filter(v => !search || v.vendor.toLowerCase().includes(search))
+  const rows = vendors
+    .filter(v => !search || v.name.toLowerCase().includes(search))
     .filter(v => groupFilter === "ALL" || (v.group || "General") === groupFilter)
+    .map(v => {
+      const agg = apAggCache.get(v.name);
+      return {
+        vendor: v.name,
+        group: v.group || "General",
+        balance: agg ? agg.balance : 0,
+        bills: agg ? agg.bills : 0,
+        payments: agg ? agg.payments : 0,
+        credits: agg ? agg.credits : 0,
+        items: agg ? agg.items : []
+      };
+    })
     .sort((a,b) => Math.abs(b.balance) - Math.abs(a.balance));
 
   const body = el("apLedgerVendorsBody");
@@ -465,47 +482,22 @@ async function refreshAPLedgerPage(){
 
   setDefaultApDate();
 
-  if (apSelectedVendor && apAggCache.has(apSelectedVendor)){
-    renderAPVendorLedger(apSelectedVendor);
+  if (apSelectedVendor){
+    // keep selection if it still exists
+    const stillExists = vendors.some(v => v.name === apSelectedVendor);
+    if (stillExists) renderAPVendorLedger(apSelectedVendor);
+    else {
+      apSelectedVendor = "";
+      el("apSelectedVendorPill").textContent = "No vendor selected";
+      el("apVendorBalancePill").textContent = "Balance: $0.00";
+      if (el("apVendorLedgerBody")) el("apVendorLedgerBody").innerHTML = "";
+    }
   } else {
-    el("apSelectedVendorPill").textContent = "No vendor selected";
+    el("apSelectedVendorPill").textContent = vendors.length ? "Click a vendor…" : "No vendors yet — add one above.";
     el("apVendorBalancePill").textContent = "Balance: $0.00";
-    if (el("apVendorLedgerBody")) el("apVendorLedgerBody").innerHTML = "";
   }
 
   el("apLedgerStatus").textContent = "✅ Ready";
-}
-
-function renderAPVendorLedger(vendorName){
-  if (!el("apVendorLedgerBody")) return;
-
-  const v = apAggCache.get(vendorName);
-  if (!v) return;
-
-  // sort by date ASC for running
-  const items = (v.items || []).slice().sort((a,b) => (a.date||"").localeCompare(b.date||""));
-  const rows = calcVendorRunningLedger(items);
-
-  el("apVendorBalancePill").textContent = "Balance: " + money(v.balance);
-
-  const body = el("apVendorLedgerBody");
-  body.innerHTML = "";
-
-  rows.forEach(it => {
-    const tr = document.createElement("tr");
-    const signClass = it.txnType === "BILL" ? "danger" : "";
-    tr.innerHTML = `
-      <td class="nowrap">${escapeHtml(it.date)}</td>
-      <td class="nowrap">${escapeHtml(it.txnType)}</td>
-      <td class="right nowrap ${signClass}">${money(it.amount)}</td>
-      <td class="right nowrap">${money(it.running)}</td>
-      <td class="nowrap">${escapeHtml(it.refNo || "")}</td>
-      <td class="nowrap">${escapeHtml(it.account || "")}</td>
-      <td class="nowrap">${escapeHtml(it.category || "")}</td>
-      <td>${escapeHtml(it.description || "")}</td>
-    `;
-    body.appendChild(tr);
-  });
 }
 
 // AP Ledger events
