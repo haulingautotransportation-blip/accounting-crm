@@ -394,6 +394,39 @@ function calcVendorRunningLedger(items){
   });
 }
 
+    function vendorIdFromName(name){
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_]/g, "");
+}
+
+async function createVendor(name, group){
+  const cleanName = String(name || "").trim();
+  if (!cleanName) throw new Error("Vendor name required");
+  const id = vendorIdFromName(cleanName);
+  if (!id) throw new Error("Vendor name not valid");
+
+  await setDoc(doc(db, "vendors", id), {
+    name: cleanName,
+    group: group || "General",
+    createdAt: serverTimestamp()
+  }, { merge: true });
+
+  return { id, name: cleanName, group: group || "General" };
+}
+
+async function loadVendorsList(){
+  const snap = await getDocs(collection(db, "vendors"));
+  const vendors = [];
+  snap.forEach(d => {
+    const v = d.data();
+    if (v?.name) vendors.push({ id: d.id, name: v.name, group: v.group || "General" });
+  });
+  vendors.sort((a,b) => a.name.localeCompare(b.name));
+  return vendors;
+}
 async function refreshAPLedgerPage(){
   if (!el("apLedgerVendorsBody")) return;
 
