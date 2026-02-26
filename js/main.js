@@ -516,7 +516,33 @@ if (el("apClearEntryBtn")) {
     el("apLedgerStatus").textContent = "";
   });
 }
+if (el("apCreateVendorBtn")) {
+  el("apCreateVendorBtn").addEventListener("click", async () => {
+    try {
+      if (!getEditMode()){
+        el("apLedgerStatus").textContent = "❌ Editing is OFF (Audit Monthly → Editing Safety).";
+        return;
+      }
 
+      const name = el("apNewVendorName")?.value || "";
+      const group = el("apNewVendorGroup")?.value || "General";
+
+      const v = await createVendor(name, group);
+
+      el("apNewVendorName").value = "";
+      el("apLedgerStatus").textContent = `✅ Vendor added: ${v.name}`;
+
+      // auto-select new vendor
+      apSelectedVendor = v.name;
+      el("apSelectedVendorPill").textContent = "Selected: " + apSelectedVendor;
+
+      await refreshAPLedgerPage();
+    } catch (e){
+      console.error(e);
+      el("apLedgerStatus").textContent = "❌ " + (e?.message || e);
+    }
+  });
+}
 if (el("apAddEntryBtn")) {
   el("apAddEntryBtn").addEventListener("click", async () => {
     if (!apSelectedVendor){
