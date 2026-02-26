@@ -1296,3 +1296,4 @@ async function computeVendorAggregates(){
   await refreshLockedMonthsUI();
   applyEditModeUI();
   updateLockBadge();
+}
