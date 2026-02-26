@@ -42,6 +42,7 @@ async function init() {
     audit: el("tab-audit"),
     importexport: el("tab-importexport"),
     archive: el("tab-archive"),
+    apledger: el("tab-apledger"),
   };
 
   tabButtons.forEach(btn => {
@@ -57,6 +58,7 @@ async function init() {
       if (btn.dataset.tab === "vendors") await refreshVendors();
       if (btn.dataset.tab === "ap") await refreshAP();
       if (btn.dataset.tab === "audit") await refreshLockedMonthsUI();
+      if (btn.dataset.tab === "apledger") await refreshAPLedgerPage();
     });
   });
 
@@ -369,6 +371,183 @@ async function init() {
   async function computeVendorAggregates(){
     const snap = await getDocs(collection(db, "transactions"));
     const map = new Map(); // vendor -> {group, balance, bills, payments, credits, items[]}
+
+    // =====================
+// AP LEDGER (Daily AP)
+// =====================
+let apAggCache = new Map();
+let apSelectedVendor = "";
+
+function setDefaultApDate(){
+  if (el("apEntryDate")) el("apEntryDate").value = new Date().toISOString().slice(0,10);
+}
+
+function calcVendorRunningLedger(items){
+  // items already sorted by date ASC
+  let run = 0;
+  return items.map(it => {
+    const a = Math.abs(Number(it.amount || 0));
+    if (it.txnType === "BILL") run += a;
+    else if (it.txnType === "PAYMENT") run -= a;
+    else if (it.txnType === "CREDIT") run -= a;
+    return { ...it, running: run };
+  });
+}
+
+async function refreshAPLedgerPage(){
+  if (!el("apLedgerVendorsBody")) return;
+
+  el("apLedgerStatus").textContent = "Loading vendors…";
+  apAggCache = await computeVendorAggregates();
+
+  const search = (el("apVendorSearch")?.value || "").toLowerCase().trim();
+  const groupFilter = el("apVendorGroupFilter")?.value || "ALL";
+
+  const rows = Array.from(apAggCache.values())
+    .filter(v => !search || v.vendor.toLowerCase().includes(search))
+    .filter(v => groupFilter === "ALL" || (v.group || "General") === groupFilter)
+    .sort((a,b) => Math.abs(b.balance) - Math.abs(a.balance));
+
+  const body = el("apLedgerVendorsBody");
+  body.innerHTML = "";
+
+  rows.forEach(v => {
+    const tr = document.createElement("tr");
+    tr.style.cursor = "pointer";
+    tr.innerHTML = `
+      <td>${escapeHtml(v.vendor)}</td>
+      <td>${escapeHtml(v.group || "General")}</td>
+      <td class="right ${v.balance > 0 ? "danger" : ""}">${money(v.balance)}</td>
+      <td class="right">${money(v.bills)}</td>
+      <td class="right">${money(v.payments)}</td>
+      <td class="right">${money(v.credits)}</td>
+    `;
+    tr.addEventListener("click", () => {
+      apSelectedVendor = v.vendor;
+      el("apSelectedVendorPill").textContent = "Selected: " + apSelectedVendor;
+      renderAPVendorLedger(apSelectedVendor);
+    });
+    body.appendChild(tr);
+  });
+
+  setDefaultApDate();
+
+  if (apSelectedVendor && apAggCache.has(apSelectedVendor)){
+    renderAPVendorLedger(apSelectedVendor);
+  } else {
+    el("apSelectedVendorPill").textContent = "No vendor selected";
+    el("apVendorBalancePill").textContent = "Balance: $0.00";
+    if (el("apVendorLedgerBody")) el("apVendorLedgerBody").innerHTML = "";
+  }
+
+  el("apLedgerStatus").textContent = "✅ Ready";
+}
+
+function renderAPVendorLedger(vendorName){
+  if (!el("apVendorLedgerBody")) return;
+
+  const v = apAggCache.get(vendorName);
+  if (!v) return;
+
+  // sort by date ASC for running
+  const items = (v.items || []).slice().sort((a,b) => (a.date||"").localeCompare(b.date||""));
+  const rows = calcVendorRunningLedger(items);
+
+  el("apVendorBalancePill").textContent = "Balance: " + money(v.balance);
+
+  const body = el("apVendorLedgerBody");
+  body.innerHTML = "";
+
+  rows.forEach(it => {
+    const tr = document.createElement("tr");
+    const signClass = it.txnType === "BILL" ? "danger" : "";
+    tr.innerHTML = `
+      <td class="nowrap">${escapeHtml(it.date)}</td>
+      <td class="nowrap">${escapeHtml(it.txnType)}</td>
+      <td class="right nowrap ${signClass}">${money(it.amount)}</td>
+      <td class="right nowrap">${money(it.running)}</td>
+      <td class="nowrap">${escapeHtml(it.refNo || "")}</td>
+      <td class="nowrap">${escapeHtml(it.account || "")}</td>
+      <td class="nowrap">${escapeHtml(it.category || "")}</td>
+      <td>${escapeHtml(it.description || "")}</td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+// AP Ledger events
+if (el("apLedgerRefreshBtn")) el("apLedgerRefreshBtn").addEventListener("click", refreshAPLedgerPage);
+if (el("apVendorSearch")) el("apVendorSearch").addEventListener("input", refreshAPLedgerPage);
+if (el("apVendorGroupFilter")) el("apVendorGroupFilter").addEventListener("change", refreshAPLedgerPage);
+
+if (el("apClearEntryBtn")) {
+  el("apClearEntryBtn").addEventListener("click", () => {
+    setDefaultApDate();
+    if (el("apEntryType")) el("apEntryType").value = "BILL";
+    if (el("apEntryAmount")) el("apEntryAmount").value = "";
+    if (el("apEntryAccount")) el("apEntryAccount").value = "8930";
+    if (el("apEntryCategory")) el("apEntryCategory").value = "COGS";
+    if (el("apEntryRefNo")) el("apEntryRefNo").value = "";
+    el("apLedgerStatus").textContent = "";
+  });
+}
+
+if (el("apAddEntryBtn")) {
+  el("apAddEntryBtn").addEventListener("click", async () => {
+    if (!apSelectedVendor){
+      el("apLedgerStatus").textContent = "❌ Select a vendor first.";
+      return;
+    }
+    if (!getEditMode()){
+      el("apLedgerStatus").textContent = "❌ Editing is OFF (Audit Monthly → Editing Safety).";
+      return;
+    }
+
+    const date = (el("apEntryDate")?.value || "").trim();
+    const txnType = (el("apEntryType")?.value || "").trim();
+    const amount = Number(el("apEntryAmount")?.value || "");
+    const account = el("apEntryAccount")?.value || "OTHER";
+    const category = el("apEntryCategory")?.value || "Other Expense";
+    const refNo = (el("apEntryRefNo")?.value || "").trim();
+
+    if (!date) { el("apLedgerStatus").textContent = "❌ Date required"; return; }
+    if (!txnType) { el("apLedgerStatus").textContent = "❌ Type required"; return; }
+    if (Number.isNaN(amount) || !amount) { el("apLedgerStatus").textContent = "❌ Amount required"; return; }
+
+    // lock check (same logic as saveBtn)
+    const mk = monthKeyFromDate(date);
+    if (lockedMonths.has(mk)){
+      el("apLedgerStatus").textContent = "❌ Month is locked: " + mk;
+      return;
+    }
+
+    try {
+      // We store as a normal transaction so all reports stay consistent
+      await addDoc(collection(db, "transactions"), {
+        date,
+        amount: Math.abs(amount),        // keep positive; txnType controls sign in AP logic
+        account,
+        category,
+        description: `AP entry for ${apSelectedVendor}`,
+        vendor: apSelectedVendor,
+        txnType,
+        refNo,
+        vendorGroup: (apAggCache.get(apSelectedVendor)?.group || "General"),
+        createdAt: serverTimestamp()
+      });
+
+      el("apLedgerStatus").textContent = "✅ Added.";
+      if (el("apEntryAmount")) el("apEntryAmount").value = "";
+      if (el("apEntryRefNo")) el("apEntryRefNo").value = "";
+
+      await refreshAPLedgerPage();
+
+    } catch (e){
+      console.error(e);
+      el("apLedgerStatus").textContent = "❌ " + (e?.message || e);
+    }
+  });
+}
 
     snap.forEach(d => {
       const t = d.data();
