@@ -372,66 +372,6 @@ async function init() {
     const snap = await getDocs(collection(db, "transactions"));
     const map = new Map(); // vendor -> {group, balance, bills, payments, credits, items[]}
 
-    // =====================
-// AP LEDGER (Daily AP)
-// =====================
-let apAggCache = new Map();
-let apSelectedVendor = "";
-
-function setDefaultApDate(){
-  if (el("apEntryDate")) el("apEntryDate").value = new Date().toISOString().slice(0,10);
-}
-
-function calcVendorRunningLedger(items){
-  // items already sorted by date ASC
-  let run = 0;
-  return items.map(it => {
-    const a = Math.abs(Number(it.amount || 0));
-    if (it.txnType === "BILL") run += a;
-    else if (it.txnType === "PAYMENT") run -= a;
-    else if (it.txnType === "CREDIT") run -= a;
-    return { ...it, running: run };
-  });
-}
-
-    function vendorIdFromName(name){
-  return String(name || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "_")
-    .replace(/[^a-z0-9_]/g, "");
-}
-
-async function createVendor(name, group){
-  const cleanName = String(name || "").trim();
-  if (!cleanName) throw new Error("Vendor name required");
-  const id = vendorIdFromName(cleanName);
-  if (!id) throw new Error("Vendor name not valid");
-
-  await setDoc(doc(db, "vendors", id), {
-    name: cleanName,
-    group: group || "General",
-    createdAt: serverTimestamp()
-  }, { merge: true });
-
-  return { id, name: cleanName, group: group || "General" };
-}
-
-async function loadVendorsList(){
-  const snap = await getDocs(collection(db, "vendors"));
-  const vendors = [];
-  snap.forEach(d => {
-    const v = d.data();
-    if (v?.name) vendors.push({ id: d.id, name: v.name, group: v.group || "General" });
-  });
-  vendors.sort((a,b) => a.name.localeCompare(b.name));
-  return vendors;
-}
-async function refreshAPLedgerPage(){
-  if (!el("apLedgerVendorsBody")) return;
-
-  el("apLedgerStatus").textContent = "Loading vendors…";
-
   // 1) Load vendors from vendors collection (works even if no transactions yet)
   const vendors = await loadVendorsList();
 
@@ -634,7 +574,66 @@ if (el("apAddEntryBtn")) {
     map.forEach(v => v.items.sort((a,b) => (a.date||"").localeCompare(b.date||"")));
     return map;
   }
+    // =====================
+// AP LEDGER (Daily AP)
+// =====================
+let apAggCache = new Map();
+let apSelectedVendor = "";
 
+function setDefaultApDate(){
+  if (el("apEntryDate")) el("apEntryDate").value = new Date().toISOString().slice(0,10);
+}
+
+function calcVendorRunningLedger(items){
+  // items already sorted by date ASC
+  let run = 0;
+  return items.map(it => {
+    const a = Math.abs(Number(it.amount || 0));
+    if (it.txnType === "BILL") run += a;
+    else if (it.txnType === "PAYMENT") run -= a;
+    else if (it.txnType === "CREDIT") run -= a;
+    return { ...it, running: run };
+  });
+}
+
+    function vendorIdFromName(name){
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_]/g, "");
+}
+
+async function createVendor(name, group){
+  const cleanName = String(name || "").trim();
+  if (!cleanName) throw new Error("Vendor name required");
+  const id = vendorIdFromName(cleanName);
+  if (!id) throw new Error("Vendor name not valid");
+
+  await setDoc(doc(db, "vendors", id), {
+    name: cleanName,
+    group: group || "General",
+    createdAt: serverTimestamp()
+  }, { merge: true });
+
+  return { id, name: cleanName, group: group || "General" };
+}
+
+async function loadVendorsList(){
+  const snap = await getDocs(collection(db, "vendors"));
+  const vendors = [];
+  snap.forEach(d => {
+    const v = d.data();
+    if (v?.name) vendors.push({ id: d.id, name: v.name, group: v.group || "General" });
+  });
+  vendors.sort((a,b) => a.name.localeCompare(b.name));
+  return vendors;
+}
+async function refreshAPLedgerPage(){
+  if (!el("apLedgerVendorsBody")) return;
+
+  el("apLedgerStatus").textContent = "Loading vendors…";
+  
   // Vendors UI
   let vendorAggCache = new Map();
   let selectedVendor = "";
