@@ -65,6 +65,131 @@
     <button class="tabBtn" data-tab="archive">Archive</button>
   </div>
 
+  <!-- AP LEDGER -->
+<div id="tab-apledger" class="tabPanel">
+  <div class="card">
+    <h2 style="margin:0 0 10px;">Accounts Payable — Daily Vendor Ledger</h2>
+    <div class="muted" style="margin-bottom:10px;">
+      Click a vendor to open the daily ledger (debit/bill increases balance, credit/payment decreases).
+    </div>
+
+    <div class="row" style="gap:10px;">
+      <div style="flex:1;">
+        <label>Search Vendor</label>
+        <input id="apVendorSearch" placeholder="Type vendor name..." />
+      </div>
+      <div style="width:220px;">
+        <label>Group</label>
+        <select id="apVendorGroupFilter">
+          <option value="ALL">All</option>
+          <option value="General">General</option>
+          <option value="Tires">Tires</option>
+          <option value="Parts">Parts</option>
+          <option value="Fuel">Fuel</option>
+        </select>
+      </div>
+      <div style="width:160px; display:flex; align-items:flex-end;">
+        <button id="apLedgerRefreshBtn">Refresh</button>
+      </div>
+    </div>
+
+    <div style="margin-top:12px; overflow:auto;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Vendor</th>
+            <th>Group</th>
+            <th class="right">Current Balance</th>
+            <th class="right">Bills</th>
+            <th class="right">Payments</th>
+            <th class="right">Credits</th>
+          </tr>
+        </thead>
+        <tbody id="apLedgerVendorsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Vendor Detail -->
+  <div class="card" style="margin-top:14px;">
+    <div class="row" style="align-items:center; gap:12px;">
+      <h3 style="margin:0;">Vendor Ledger</h3>
+      <span id="apSelectedVendorPill" class="pill">No vendor selected</span>
+      <span style="flex:1;"></span>
+      <span id="apVendorBalancePill" class="pill">Balance: $0.00</span>
+    </div>
+
+    <div class="row" style="gap:10px; margin-top:12px;">
+      <div style="width:160px;">
+        <label>Date</label>
+        <input id="apEntryDate" type="date" />
+      </div>
+
+      <div style="width:170px;">
+        <label>Type</label>
+        <select id="apEntryType">
+          <option value="BILL">Debit (Bill)</option>
+          <option value="PAYMENT">Credit (Payment)</option>
+          <option value="CREDIT">Credit Memo</option>
+        </select>
+      </div>
+
+      <div style="width:180px;">
+        <label>Amount</label>
+        <input id="apEntryAmount" type="number" step="0.01" placeholder="0.00" />
+      </div>
+
+      <div style="width:140px;">
+        <label>Account</label>
+        <select id="apEntryAccount">
+          <option value="8930">8930</option>
+          <option value="9081">9081</option>
+          <option value="OTHER">OTHER</option>
+        </select>
+      </div>
+
+      <div style="width:200px;">
+        <label>Category</label>
+        <select id="apEntryCategory">
+          <option value="COGS">COGS</option>
+          <option value="Repairs & Maintenance">Repairs & Maintenance</option>
+          <option value="Other Expense">Other Expense</option>
+        </select>
+      </div>
+
+      <div style="flex:1;">
+        <label>Invoice/Ref #</label>
+        <input id="apEntryRefNo" placeholder="INV / CHECK / Ref..." />
+      </div>
+
+      <div style="width:170px; display:flex; align-items:flex-end; gap:8px;">
+        <button id="apAddEntryBtn">Add</button>
+        <button id="apClearEntryBtn" class="secondary">Clear</button>
+      </div>
+    </div>
+
+    <div style="margin-top:12px; overflow:auto;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th class="right">Amount</th>
+            <th class="right">Running Balance</th>
+            <th>Ref #</th>
+            <th>Account</th>
+            <th>Category</th>
+            <th>Memo</th>
+          </tr>
+        </thead>
+        <tbody id="apVendorLedgerBody"></tbody>
+      </table>
+    </div>
+
+    <div id="apLedgerStatus" class="muted" style="margin-top:10px;"></div>
+  </div>
+</div>
+
   <!-- DASHBOARD -->
   <div class="tabPanel active" id="tab-dashboard">
     <!-- ADD TRANSACTION -->
