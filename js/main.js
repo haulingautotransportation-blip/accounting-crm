@@ -1477,4 +1477,3 @@ if (el("apAddEntryBtn")) {
   await refreshLockedMonthsUI();
   applyEditModeUI();
   updateLockBadge();
-}
